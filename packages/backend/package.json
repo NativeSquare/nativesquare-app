@@ -10,7 +10,7 @@
     "migrate:dryrun": "convex run migrations:runAll \"{dryRun: true}\"",
     "migrate:status": "convex run --component migrations lib:getStatus",
     "deploy:preview": "dotenv -e .env.preview -- convex deploy --preview-create preview",
-    "deploy:prod": "convex deploy --prod"
+    "deploy:prod": "convex deploy"
   },
   "author": "",
   "license": "ISC",
