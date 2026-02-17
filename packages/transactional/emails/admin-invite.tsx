@@ -12,7 +12,7 @@ import {
 } from "@react-email/components";
 
 // Inlined from @packages/shared/constants to support React Email preview
-const APP_NAME = "Test Monorepo";
+const APP_NAME = "NativeSquare";
 const APP_ADDRESS = "60 rue François 1er, 75008 Paris, France";
 
 interface AdminInviteEmailProps {
