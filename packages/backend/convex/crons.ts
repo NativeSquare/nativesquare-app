@@ -13,6 +13,14 @@ crons.interval(
   internal.crons.cleanupResendEmails,
 );
 
+// Run Upwork job discovery for all users with credentials (1–2x per day)
+crons.interval(
+  "upwork-discovery",
+  { hours: 12 },
+  internal.upwork.runScheduledDiscovery,
+  {},
+);
+
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const FOUR_WEEKS_MS = 4 * ONE_WEEK_MS;
 

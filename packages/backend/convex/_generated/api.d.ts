@@ -18,8 +18,15 @@ import type * as migrations from "../migrations.js";
 import type * as storage from "../storage.js";
 import type * as table_admin from "../table/admin.js";
 import type * as table_adminInvites from "../table/adminInvites.js";
+import type * as table_discoveredJobs from "../table/discoveredJobs.js";
+import type * as table_discoveryRefreshLog from "../table/discoveryRefreshLog.js";
+import type * as table_discoveryRuns from "../table/discoveryRuns.js";
 import type * as table_feedback from "../table/feedback.js";
+import type * as table_proposals from "../table/proposals.js";
+import type * as table_upworkCredentials from "../table/upworkCredentials.js";
+import type * as table_upworkOAuthState from "../table/upworkOAuthState.js";
 import type * as table_users from "../table/users.js";
+import type * as upwork from "../upwork.js";
 import type * as utils_generateFunctions from "../utils/generateFunctions.js";
 
 import type {
@@ -39,8 +46,15 @@ declare const fullApi: ApiFromModules<{
   storage: typeof storage;
   "table/admin": typeof table_admin;
   "table/adminInvites": typeof table_adminInvites;
+  "table/discoveredJobs": typeof table_discoveredJobs;
+  "table/discoveryRefreshLog": typeof table_discoveryRefreshLog;
+  "table/discoveryRuns": typeof table_discoveryRuns;
   "table/feedback": typeof table_feedback;
+  "table/proposals": typeof table_proposals;
+  "table/upworkCredentials": typeof table_upworkCredentials;
+  "table/upworkOAuthState": typeof table_upworkOAuthState;
   "table/users": typeof table_users;
+  upwork: typeof upwork;
   "utils/generateFunctions": typeof utils_generateFunctions;
 }>;
 
