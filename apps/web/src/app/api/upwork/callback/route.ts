@@ -30,18 +30,17 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  // Debug: log what we received (no secrets — code is one-time use)
-  const receivedParams = Array.from(searchParams.keys()).filter(
-    (k) => k !== "code",
+  // Debug: log full URL received (code is one-time use; helps see if param was stripped)
+  const fullUrl = request.url;
+  const receivedParams = Object.fromEntries(
+    Array.from(searchParams.entries()).filter(([k]) => k !== "code"),
   );
   if (!code) {
     console.error(
-      "[Upwork OAuth] Callback received without code. URL:",
-      request.nextUrl.pathname,
-      "Query keys:",
+      "[Upwork OAuth] Callback without code. Full URL:",
+      fullUrl,
+      "Query params (excluding code):",
       receivedParams,
-      "Has state:",
-      !!state,
     );
   }
 
@@ -63,12 +62,18 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code) {
+    const upworkError = searchParams.get("error");
+    const upworkErrorDesc = searchParams.get("error_description");
     return NextResponse.json(
       {
         error: "Missing authorization code",
-        hint: "Upwork did not include the authorization code in the callback. Common causes: (1) Redirect URI mismatch — in Upwork Developer Portal the redirect URI must be exactly " +
-          (process.env.UPWORK_REDIRECT_URI ?? "your UPWORK_REDIRECT_URI") +
-          " (no trailing slash, same protocol and host). (2) A proxy or firewall may be stripping the 'code' query parameter; allow it for this path.",
+        receivedParams: receivedParams,
+        upworkError: upworkError ?? undefined,
+        upworkErrorDescription: upworkErrorDesc ?? undefined,
+        hint:
+          "Upwork did not include the authorization code. Check server logs for the full callback URL. Common causes: (1) Redirect URI must match exactly in Upwork Developer Portal (e.g. " +
+          (process.env.UPWORK_REDIRECT_URI ?? "UPWORK_REDIRECT_URI") +
+          "). (2) A proxy/WAF may be stripping the 'code' query parameter.",
       },
       { status: 400 },
     );

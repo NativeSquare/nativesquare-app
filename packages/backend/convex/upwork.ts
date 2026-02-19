@@ -112,6 +112,33 @@ export const storeTokens = mutation({
 });
 
 /**
+ * Debug: look up an OAuth state to verify it was issued by this app.
+ * Returns when the state was created (if found). Use to confirm the callback
+ * state matches a flow we started (e.g. state=vV8NHhq6osnGMHeMOoydXldRZ5Cunpf4).
+ * Does not return user id or other sensitive data.
+ */
+export const getUpworkStateInfo = query({
+  args: { state: v.string() },
+  returns: v.union(
+    v.object({
+      found: v.literal(true),
+      createdAt: v.number(),
+    }),
+    v.object({ found: v.literal(false) }),
+  ),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("upworkOAuthState")
+      .withIndex("by_state", (q) => q.eq("state", args.state))
+      .unique();
+    if (!row) {
+      return { found: false as const };
+    }
+    return { found: true as const, createdAt: row.createdAt };
+  },
+});
+
+/**
  * Whether the current user has connected Upwork.
  */
 export const getConnectionStatus = query({
