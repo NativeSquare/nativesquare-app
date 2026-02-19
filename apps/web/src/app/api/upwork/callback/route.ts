@@ -30,6 +30,21 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
+  // Debug: log what we received (no secrets — code is one-time use)
+  const receivedParams = Array.from(searchParams.keys()).filter(
+    (k) => k !== "code",
+  );
+  if (!code) {
+    console.error(
+      "[Upwork OAuth] Callback received without code. URL:",
+      request.nextUrl.pathname,
+      "Query keys:",
+      receivedParams,
+      "Has state:",
+      !!state,
+    );
+  }
+
   // Handle error response from Upwork
   if (error) {
     const errorDescription =
@@ -48,9 +63,13 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code) {
-    console.error("[Upwork OAuth] Missing authorization code in callback");
     return NextResponse.json(
-      { error: "Missing authorization code" },
+      {
+        error: "Missing authorization code",
+        hint: "Upwork did not include the authorization code in the callback. Common causes: (1) Redirect URI mismatch — in Upwork Developer Portal the redirect URI must be exactly " +
+          (process.env.UPWORK_REDIRECT_URI ?? "your UPWORK_REDIRECT_URI") +
+          " (no trailing slash, same protocol and host). (2) A proxy or firewall may be stripping the 'code' query parameter; allow it for this path.",
+      },
       { status: 400 },
     );
   }

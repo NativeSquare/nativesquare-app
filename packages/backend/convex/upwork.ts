@@ -32,9 +32,10 @@ export const initiateConnect = mutation({
     }
 
     const state = generateRandomString(32, alphabet("a-z", "A-Z", "0-9"));
+    // Prefer env so production uses one canonical redirect URI (must match Upwork app settings).
     const redirectUri =
-      args.redirectUri ??
       (process.env.UPWORK_REDIRECT_URI as string | undefined) ??
+      args.redirectUri ??
       "";
     const clientId = process.env.UPWORK_CLIENT_ID as string | undefined;
     if (!clientId || !redirectUri) {
