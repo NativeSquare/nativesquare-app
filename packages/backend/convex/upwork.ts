@@ -1,180 +1,58 @@
+import { Upwork } from "@nativesquare/upwork";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { alphabet, generateRandomString } from "oslo/crypto";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import {
   action,
   internalAction,
   internalMutation,
-  internalQuery,
   mutation,
   query,
 } from "./_generated/server";
 
-const UPWORK_AUTH_BASE =
-  "https://www.upwork.com/ab/account-security/oauth2/authorize";
+const upwork = new Upwork(components.upwork);
+
+// ---------------------------------------------------------------------------
+// OAuth
+// ---------------------------------------------------------------------------
 
 /**
- * Start Upwork OAuth: create state, return auth URL.
- * Frontend redirects the user to the returned authUrl.
+ * Return the Upwork OAuth authorization URL so the frontend can redirect.
+ * The callback is handled by the component's HTTP route registered in http.ts.
  */
-export const initiateConnect = mutation({
-  args: {
-    redirectUri: v.optional(v.string()),
-  },
-  returns: v.object({
-    authUrl: v.string(),
-    state: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      throw new Error("Not authenticated");
-    }
-
-    const state = generateRandomString(32, alphabet("a-z", "A-Z", "0-9"));
-    // Prefer env so production uses one canonical redirect URI (must match Upwork app settings).
-    const redirectUri =
-      (process.env.UPWORK_REDIRECT_URI as string | undefined) ??
-      args.redirectUri ??
-      "";
-    const clientId = process.env.UPWORK_CLIENT_ID as string | undefined;
-    if (!clientId || !redirectUri) {
+export const getAuthUrl = query({
+  args: {},
+  returns: v.string(),
+  handler: async (_ctx) => {
+    const clientId = process.env.UPWORK_CLIENT_ID;
+    const siteUrl = process.env.CONVEX_SITE_URL;
+    if (!clientId || !siteUrl) {
       throw new Error(
-        "Upwork OAuth not configured: UPWORK_CLIENT_ID and UPWORK_REDIRECT_URI (or redirectUri) required",
+        "Upwork OAuth not configured: UPWORK_CLIENT_ID and CONVEX_SITE_URL required",
       );
     }
-
-    await ctx.db.insert("upworkOAuthState", {
-      state,
-      userId,
-      createdAt: Date.now(),
-    });
-
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      response_type: "code",
-      state,
-    });
-    const authUrl = `${UPWORK_AUTH_BASE}?${params.toString()}`;
-
-    // Log so you can verify env and OAuth URL in Convex dashboard → Logs
-    console.log("[Upwork OAuth] Initiate — redirect_uri:", redirectUri);
-    console.log("[Upwork OAuth] Initiate — client_id:", clientId);
-    console.log("[Upwork OAuth] Initiate — full auth URL:", authUrl);
-
-    return { authUrl, state };
+    return upwork.getAuthorizationUrl({ clientId, siteUrl });
   },
 });
 
 /**
- * Store tokens after OAuth callback. Called from Next.js API route with the
- * state returned by Upwork and the tokens from the token exchange.
- * Validates state and associates credentials with the user who initiated.
- */
-export const storeTokens = mutation({
-  args: {
-    state: v.string(),
-    accessToken: v.string(),
-    refreshToken: v.string(),
-    expiresIn: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("upworkOAuthState")
-      .withIndex("by_state", (q) => q.eq("state", args.state))
-      .unique();
-    if (!row) {
-      throw new Error("Invalid or expired OAuth state");
-    }
-    const userId = row.userId;
-
-    const expiresAt = Date.now() + args.expiresIn * 1000;
-
-    const existing = await ctx.db
-      .query("upworkCredentials")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        accessToken: args.accessToken,
-        refreshToken: args.refreshToken,
-        expiresAt,
-      });
-    } else {
-      await ctx.db.insert("upworkCredentials", {
-        userId,
-        accessToken: args.accessToken,
-        refreshToken: args.refreshToken,
-        expiresAt,
-      });
-    }
-
-    await ctx.db.delete(row._id);
-    return null;
-  },
-});
-
-/**
- * Debug: look up an OAuth state to verify it was issued by this app.
- * Returns when the state was created (if found). Use to confirm the callback
- * state matches a flow we started (e.g. state=vV8NHhq6osnGMHeMOoydXldRZ5Cunpf4).
- * Does not return user id or other sensitive data.
- */
-export const getUpworkStateInfo = query({
-  args: { state: v.string() },
-  returns: v.union(
-    v.object({
-      found: v.literal(true),
-      createdAt: v.number(),
-    }),
-    v.object({ found: v.literal(false) }),
-  ),
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("upworkOAuthState")
-      .withIndex("by_state", (q) => q.eq("state", args.state))
-      .unique();
-    if (!row) {
-      return { found: false as const };
-    }
-    return { found: true as const, createdAt: row.createdAt };
-  },
-});
-
-/**
- * Whether the current user has connected Upwork.
+ * Whether the Upwork account is connected (component-level, not per-user).
  */
 export const getConnectionStatus = query({
   args: {},
   returns: v.union(
-    v.object({
-      connected: v.literal(true),
-      credentialsId: v.id("upworkCredentials"),
-    }),
-    v.object({ connected: v.literal(false) }),
+    v.literal("connected"),
+    v.literal("disconnected"),
+    v.literal("expired"),
   ),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      return { connected: false as const };
-    }
-    const creds = await ctx.db
-      .query("upworkCredentials")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
-    if (!creds) {
-      return { connected: false as const };
-    }
-    return {
-      connected: true as const,
-      credentialsId: creds._id,
-    };
+    return await upwork.getAuthStatus(ctx);
   },
 });
+
+// ---------------------------------------------------------------------------
+// Proposals (unchanged — app-level, per-user)
+// ---------------------------------------------------------------------------
 
 const proposalDocValidator = v.object({
   _id: v.id("proposals"),
@@ -199,9 +77,6 @@ const proposalDocValidator = v.object({
   signedAt: v.optional(v.number()),
 });
 
-/**
- * List current user's proposals for the funnel view.
- */
 export const listProposals = query({
   args: {},
   returns: v.array(proposalDocValidator),
@@ -218,6 +93,71 @@ export const listProposals = query({
   },
 });
 
+const funnelStatusValidator = v.union(
+  v.literal("sent"),
+  v.literal("viewed"),
+  v.literal("loom_viewed"),
+  v.literal("interviewing"),
+  v.literal("signed"),
+);
+
+export const createProposal = mutation({
+  args: {
+    upworkJobId: v.string(),
+    upworkJobTitle: v.string(),
+    coverLetter: v.string(),
+    videoLink: v.optional(v.string()),
+    boosted: v.boolean(),
+  },
+  returns: v.id("proposals"),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new Error("Not authenticated");
+    }
+    return await ctx.db.insert("proposals", {
+      userId,
+      upworkJobId: args.upworkJobId,
+      upworkJobTitle: args.upworkJobTitle,
+      coverLetter: args.coverLetter,
+      videoLink: args.videoLink,
+      status: "sent",
+      sentAt: Date.now(),
+      boosted: args.boosted,
+    });
+  },
+});
+
+export const updateProposalStatus = mutation({
+  args: {
+    proposalId: v.id("proposals"),
+    status: funnelStatusValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new Error("Not authenticated");
+    }
+    const proposal = await ctx.db.get(args.proposalId);
+    if (!proposal || proposal.userId !== userId) {
+      throw new Error("Proposal not found");
+    }
+    const now = Date.now();
+    const updates: Record<string, unknown> = { status: args.status };
+    if (args.status === "viewed") updates.proposalViewedAt = now;
+    if (args.status === "loom_viewed") updates.loomViewedAt = now;
+    if (args.status === "interviewing") updates.interviewingAt = now;
+    if (args.status === "signed") updates.signedAt = now;
+    await ctx.db.patch(args.proposalId, updates);
+    return null;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Discovered jobs (per-user tracking)
+// ---------------------------------------------------------------------------
+
 const discoveredJobValidator = v.object({
   _id: v.id("discoveredJobs"),
   _creationTime: v.number(),
@@ -226,20 +166,17 @@ const discoveredJobValidator = v.object({
   title: v.string(),
   description: v.optional(v.string()),
   budgetInfo: v.optional(v.string()),
+  budgetAmount: v.optional(v.number()),
   postedAt: v.optional(v.number()),
   applied: v.boolean(),
   appliedAt: v.optional(v.number()),
   proposalId: v.optional(v.id("proposals")),
 });
 
-/**
- * Get a single discovered job by id. Returns null if not found or not owned by current user.
- */
 export const getDiscoveredJob = query({
   args: {
     jobId: v.id("discoveredJobs"),
   },
-  returns: v.union(discoveredJobValidator, v.null()),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
@@ -253,14 +190,10 @@ export const getDiscoveredJob = query({
   },
 });
 
-/**
- * List current user's discovered jobs (what to apply to), sorted by posting date (newer first).
- */
 export const listDiscoveredJobs = query({
   args: {
     appliedOnly: v.optional(v.boolean()),
   },
-  returns: v.array(discoveredJobValidator),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
@@ -289,103 +222,6 @@ export const listDiscoveredJobs = query({
   },
 });
 
-const funnelStatusValidator = v.union(
-  v.literal("sent"),
-  v.literal("viewed"),
-  v.literal("loom_viewed"),
-  v.literal("interviewing"),
-  v.literal("signed"),
-);
-
-/**
- * Record a new proposal after the user sends (and optionally boosts) via Upwork.
- * Call this after a successful apply/boost so the funnel is populated.
- */
-export const createProposal = mutation({
-  args: {
-    upworkJobId: v.string(),
-    upworkJobTitle: v.string(),
-    coverLetter: v.string(),
-    videoLink: v.optional(v.string()),
-    boosted: v.boolean(),
-  },
-  returns: v.id("proposals"),
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      throw new Error("Not authenticated");
-    }
-    const sentAt = Date.now();
-    return await ctx.db.insert("proposals", {
-      userId,
-      upworkJobId: args.upworkJobId,
-      upworkJobTitle: args.upworkJobTitle,
-      coverLetter: args.coverLetter,
-      videoLink: args.videoLink,
-      status: "sent",
-      sentAt,
-      boosted: args.boosted,
-    });
-  },
-});
-
-/**
- * Update a proposal's funnel status (e.g. when we learn from Upwork that it was viewed).
- */
-export const updateProposalStatus = mutation({
-  args: {
-    proposalId: v.id("proposals"),
-    status: funnelStatusValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      throw new Error("Not authenticated");
-    }
-    const proposal = await ctx.db.get(args.proposalId);
-    if (!proposal || proposal.userId !== userId) {
-      throw new Error("Proposal not found");
-    }
-    const now = Date.now();
-    const updates: Record<string, unknown> = { status: args.status };
-    if (args.status === "viewed") updates.proposalViewedAt = now;
-    if (args.status === "loom_viewed") updates.loomViewedAt = now;
-    if (args.status === "interviewing") updates.interviewingAt = now;
-    if (args.status === "signed") updates.signedAt = now;
-    await ctx.db.patch(args.proposalId, updates);
-    return null;
-  },
-});
-
-const discoveredJobItemValidator = v.object({
-  upworkJobId: v.string(),
-  title: v.string(),
-  description: v.optional(v.string()),
-  budgetInfo: v.optional(v.string()),
-  postedAt: v.optional(v.number()),
-});
-
-/**
- * Discover jobs from Upwork (e.g. in niche, >$5K).
- * TODO: Implement Upwork GraphQL job search (https://developer.upwork.com/) and
- * persist results via addDiscoveredJob. For now returns empty list.
- */
-export const discoverJobs = action({
-  args: {
-    minBudget: v.optional(v.number()),
-    keyword: v.optional(v.string()),
-  },
-  returns: v.array(discoveredJobItemValidator),
-  handler: async (_ctx, _args) => {
-    // Placeholder: real implementation will use Upwork GraphQL API with user's tokens
-    return [];
-  },
-});
-
-/**
- * Mark a discovered job as applied and link to the proposal.
- */
 export const markJobApplied = mutation({
   args: {
     jobId: v.id("discoveredJobs"),
@@ -410,9 +246,6 @@ export const markJobApplied = mutation({
   },
 });
 
-/**
- * Add a discovered job to the list (manual add or from future job discovery action).
- */
 export const addDiscoveredJob = mutation({
   args: {
     upworkJobId: v.string(),
@@ -448,6 +281,10 @@ export const addDiscoveredJob = mutation({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Discovery rate limiting & status
+// ---------------------------------------------------------------------------
+
 const MANUAL_REFRESH_DAILY_CAP = 3;
 
 function getTodayUtcDateString(): string {
@@ -455,9 +292,6 @@ function getTodayUtcDateString(): string {
   return now.toISOString().slice(0, 10);
 }
 
-/**
- * Status for manual refresh cap and "Last updated at" display.
- */
 export const getDiscoveryStatus = query({
   args: {},
   returns: v.object({
@@ -494,9 +328,6 @@ export const getDiscoveryStatus = query({
   },
 });
 
-/**
- * Request a manual discovery run (Refresh jobs). Enforces daily cap.
- */
 export const runDiscovery = mutation({
   args: {},
   returns: v.object({
@@ -539,9 +370,10 @@ export const runDiscovery = mutation({
   },
 });
 
-/**
- * Internal: record a discovery run for "Last updated at".
- */
+// ---------------------------------------------------------------------------
+// Internal: discovery run tracking
+// ---------------------------------------------------------------------------
+
 export const recordDiscoveryRun = internalMutation({
   args: {
     userId: v.id("users"),
@@ -558,9 +390,6 @@ export const recordDiscoveryRun = internalMutation({
   },
 });
 
-/**
- * Internal: add a discovered job for a specific user (used by scheduled/manual discovery).
- */
 export const addDiscoveredJobForUser = internalMutation({
   args: {
     userId: v.id("users"),
@@ -568,6 +397,7 @@ export const addDiscoveredJobForUser = internalMutation({
     title: v.string(),
     description: v.optional(v.string()),
     budgetInfo: v.optional(v.string()),
+    budgetAmount: v.optional(v.number()),
     postedAt: v.optional(v.number()),
   },
   returns: v.id("discoveredJobs"),
@@ -587,102 +417,17 @@ export const addDiscoveredJobForUser = internalMutation({
       title: args.title,
       description: args.description,
       budgetInfo: args.budgetInfo,
+      budgetAmount: args.budgetAmount,
       postedAt: args.postedAt,
       applied: false,
     });
   },
 });
 
-const UPWORK_GRAPHQL_URL = "https://api.upwork.com/graphql";
-const UPWORK_TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token";
+// ---------------------------------------------------------------------------
+// Internal: run discovery using the @nativesquare/upwork component
+// ---------------------------------------------------------------------------
 
-const UPWORK_JOBS_QUERY = `
-query DiscoverJobs($filter: MarketplaceJobPostingsSearchFilter, $searchType: MarketplaceJobPostingSearchType, $sort: [MarketplaceJobPostingSearchSortAttribute]) {
-  marketplaceJobPostingsSearch(
-    marketPlaceJobFilter: $filter
-    searchType: $searchType
-    sortAttributes: $sort
-  ) {
-    totalCount
-    edges {
-      node {
-        id
-        title
-        description
-        ciphertext
-        createdDateTime
-        amount { rawValue currency displayValue }
-        duration
-        durationLabel
-        client {
-          totalHires
-          totalSpent { displayValue }
-          verificationStatus
-          totalFeedback
-        }
-        skills { prettyName }
-      }
-    }
-  }
-}
-`;
-
-export const getUpworkCredentials = internalQuery({
-  args: { userId: v.id("users") },
-  returns: v.union(
-    v.object({
-      accessToken: v.string(),
-      refreshToken: v.string(),
-      expiresAt: v.number(),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx, args) => {
-    const creds = await ctx.db
-      .query("upworkCredentials")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .unique();
-    if (!creds) return null;
-    return {
-      accessToken: creds.accessToken,
-      refreshToken: creds.refreshToken,
-      expiresAt: creds.expiresAt,
-    };
-  },
-});
-
-export const updateUpworkTokens = internalMutation({
-  args: {
-    userId: v.id("users"),
-    accessToken: v.string(),
-    refreshToken: v.string(),
-    expiresAt: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("upworkCredentials")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .unique();
-    if (!existing) {
-      console.error(
-        "[Upwork Discovery] No credentials row to update for user",
-        args.userId,
-      );
-      return null;
-    }
-    await ctx.db.patch(existing._id, {
-      accessToken: args.accessToken,
-      refreshToken: args.refreshToken,
-      expiresAt: args.expiresAt,
-    });
-    return null;
-  },
-});
-
-/**
- * Internal: run discovery for one user (scheduled or after manual request).
- */
 export const runDiscoveryForUser = internalAction({
   args: {
     userId: v.id("users"),
@@ -695,171 +440,68 @@ export const runDiscoveryForUser = internalAction({
       source: args.source,
     });
 
-    const creds = await ctx.runQuery(internal.upwork.getUpworkCredentials, {
-      userId: args.userId,
-    });
-    if (!creds) {
+    const clientId = process.env.UPWORK_CLIENT_ID;
+    const clientSecret = process.env.UPWORK_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
       console.error(
-        "[Upwork Discovery] No credentials found for user",
-        args.userId,
+        "[Upwork Discovery] UPWORK_CLIENT_ID or UPWORK_CLIENT_SECRET missing",
       );
       return null;
     }
 
-    let { accessToken } = creds;
-    const TOKEN_EXPIRY_BUFFER_MS = 60_000;
-
-    if (creds.expiresAt < Date.now() + TOKEN_EXPIRY_BUFFER_MS) {
-      console.log("[Upwork Discovery] Access token expired, refreshing…");
-      const clientId = process.env.UPWORK_CLIENT_ID;
-      const clientSecret = process.env.UPWORK_CLIENT_SECRET;
-      if (!clientId || !clientSecret) {
-        console.error(
-          "[Upwork Discovery] Cannot refresh token: UPWORK_CLIENT_ID or UPWORK_CLIENT_SECRET missing",
-        );
-        return null;
-      }
-
-      const refreshRes = await fetch(UPWORK_TOKEN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          refresh_token: creds.refreshToken,
-          client_id: clientId,
-          client_secret: clientSecret,
-        }).toString(),
+    let result;
+    try {
+      result = await upwork.searchJobPostings(ctx, {
+        clientId,
+        clientSecret,
       });
-
-      if (!refreshRes.ok) {
-        const body = await refreshRes.text();
-        console.error(
-          "[Upwork Discovery] Token refresh failed:",
-          refreshRes.status,
-          body,
-        );
-        return null;
-      }
-
-      const tokenData = (await refreshRes.json()) as {
-        access_token: string;
-        refresh_token: string;
-        expires_in: number;
-      };
-
-      accessToken = tokenData.access_token;
-      const newExpiresAt = Date.now() + tokenData.expires_in * 1000;
-
-      await ctx.runMutation(internal.upwork.updateUpworkTokens, {
-        userId: args.userId,
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        expiresAt: newExpiresAt,
-      });
-      console.log("[Upwork Discovery] Token refreshed successfully");
-    }
-
-    const graphqlRes = await fetch(UPWORK_GRAPHQL_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        query: UPWORK_JOBS_QUERY,
-        variables: {
-          filter: {
-            pagination_eq: { after: "0", first: 30 },
-          },
-          searchType: "USER_JOBS_SEARCH",
-          sort: [{ field: "RECENCY" }],
-        },
-      }),
-    });
-
-    if (!graphqlRes.ok) {
-      const body = await graphqlRes.text();
-      console.error(
-        "[Upwork Discovery] GraphQL request failed:",
-        graphqlRes.status,
-        body,
-      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("[Upwork Discovery] Search failed:", message);
       return null;
     }
 
-    const gqlBody = (await graphqlRes.json()) as {
-      data?: {
-        marketplaceJobPostingsSearch?: {
-          totalCount?: number;
-          edges?: Array<{
-            node: {
-              id: string;
-              title: string;
-              description: string;
-              ciphertext: string;
-              createdDateTime: string;
-              amount?: { rawValue?: string; currency?: string; displayValue?: string };
-              duration?: string;
-              durationLabel?: string;
-              client?: {
-                totalHires?: number;
-                totalSpent?: { displayValue?: string };
-                verificationStatus?: string;
-                totalFeedback?: number;
-              };
-              skills?: Array<{ prettyName: string }>;
-            };
-          }>;
-        };
-      };
-      errors?: Array<{ message: string }>;
-    };
-
-    if (gqlBody.errors && gqlBody.errors.length > 0) {
-      console.error(
-        "[Upwork Discovery] GraphQL errors:",
-        JSON.stringify(gqlBody.errors),
-      );
-      return null;
-    }
-
-    const edges =
-      gqlBody.data?.marketplaceJobPostingsSearch?.edges ?? [];
-    const totalCount =
-      gqlBody.data?.marketplaceJobPostingsSearch?.totalCount ?? 0;
     console.log(
-      `[Upwork Discovery] Fetched ${edges.length} jobs (totalCount: ${totalCount}) for user ${args.userId}`,
+      `[Upwork Discovery] Fetched ${result.postings.length} jobs (totalCount: ${result.totalCount}) for user ${args.userId}`,
     );
 
-    for (const edge of edges) {
-      const node = edge.node;
+    for (const posting of result.postings) {
+      let budgetAmount: number | undefined;
+      if (posting.budgetAmount) {
+        const parsed = parseFloat(posting.budgetAmount);
+        if (!isNaN(parsed)) budgetAmount = parsed;
+      }
 
       let budgetInfo: string | undefined;
-      if (node.amount?.displayValue) {
-        budgetInfo = node.amount.displayValue;
+      if (posting.budgetAmount && posting.budgetCurrency) {
+        budgetInfo = `${posting.budgetCurrency} ${posting.budgetAmount}`;
+      } else if (posting.budgetAmount) {
+        budgetInfo = posting.budgetAmount;
       }
-      if (node.durationLabel) {
+      if (posting.duration) {
         budgetInfo = budgetInfo
-          ? `${budgetInfo} · ${node.durationLabel}`
-          : node.durationLabel;
+          ? `${budgetInfo} · ${posting.duration}`
+          : posting.duration;
       }
 
       let postedAt: number | undefined;
-      if (node.createdDateTime) {
-        const parsed = Date.parse(node.createdDateTime);
+      if (posting.createdDateTime) {
+        const parsed = Date.parse(posting.createdDateTime);
         if (!isNaN(parsed)) postedAt = parsed;
       }
 
-      const description = node.description
-        ? node.description.slice(0, 2000)
+      const description = posting.description
+        ? posting.description.slice(0, 2000)
         : undefined;
 
       await ctx.runMutation(internal.upwork.addDiscoveredJobForUser, {
         userId: args.userId,
-        upworkJobId: node.ciphertext || node.id,
-        title: node.title,
+        upworkJobId: posting.upworkId,
+        title: posting.title,
         description,
         budgetInfo,
+        budgetAmount,
         postedAt,
       });
     }
@@ -868,16 +510,16 @@ export const runDiscoveryForUser = internalAction({
   },
 });
 
-/**
- * Internal: run scheduled discovery for all users with Upwork credentials.
- * Called by cron 1-2 times per day.
- */
+// ---------------------------------------------------------------------------
+// Internal: scheduled discovery for all users with auto-apply settings
+// ---------------------------------------------------------------------------
+
 export const runScheduledDiscovery = internalMutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const creds = await ctx.db.query("upworkCredentials").collect();
-    const userIds = [...new Set(creds.map((c) => c.userId))];
+    const allSettings = await ctx.db.query("autoApplySettings").collect();
+    const userIds = [...new Set(allSettings.map((s) => s.userId))];
     for (const userId of userIds) {
       await ctx.scheduler.runAfter(0, internal.upwork.runDiscoveryForUser, {
         userId,
@@ -885,5 +527,28 @@ export const runScheduledDiscovery = internalMutation({
       });
     }
     return null;
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Placeholder for manual job search (unused, kept for API compat)
+// ---------------------------------------------------------------------------
+
+export const discoverJobs = action({
+  args: {
+    minBudget: v.optional(v.number()),
+    keyword: v.optional(v.string()),
+  },
+  returns: v.array(
+    v.object({
+      upworkJobId: v.string(),
+      title: v.string(),
+      description: v.optional(v.string()),
+      budgetInfo: v.optional(v.string()),
+      postedAt: v.optional(v.number()),
+    }),
+  ),
+  handler: async (_ctx, _args) => {
+    return [];
   },
 });

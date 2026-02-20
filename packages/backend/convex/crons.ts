@@ -13,11 +13,19 @@ crons.interval(
   internal.crons.cleanupResendEmails,
 );
 
-// Run Upwork job discovery for all users with credentials (1–2x per day)
+// Run Upwork job discovery for all users with auto-apply settings (1–2x per day)
 crons.interval(
   "upwork-discovery",
   { hours: 12 },
   internal.upwork.runScheduledDiscovery,
+  {},
+);
+
+// Run auto-apply workflow twice daily (with per-user jitter added inside the handler)
+crons.interval(
+  "upwork-auto-apply",
+  { hours: 12 },
+  internal.autoApply.runScheduledAutoApply,
   {},
 );
 

@@ -9,6 +9,8 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as autoApply from "../autoApply.js";
+import type * as autoApplyActions from "../autoApplyActions.js";
 import type * as crons from "../crons.js";
 import type * as emails from "../emails.js";
 import type * as http from "../http.js";
@@ -18,13 +20,13 @@ import type * as migrations from "../migrations.js";
 import type * as storage from "../storage.js";
 import type * as table_admin from "../table/admin.js";
 import type * as table_adminInvites from "../table/adminInvites.js";
+import type * as table_autoApplySettings from "../table/autoApplySettings.js";
 import type * as table_discoveredJobs from "../table/discoveredJobs.js";
 import type * as table_discoveryRefreshLog from "../table/discoveryRefreshLog.js";
 import type * as table_discoveryRuns from "../table/discoveryRuns.js";
 import type * as table_feedback from "../table/feedback.js";
+import type * as table_pendingApplications from "../table/pendingApplications.js";
 import type * as table_proposals from "../table/proposals.js";
-import type * as table_upworkCredentials from "../table/upworkCredentials.js";
-import type * as table_upworkOAuthState from "../table/upworkOAuthState.js";
 import type * as table_users from "../table/users.js";
 import type * as upwork from "../upwork.js";
 import type * as utils_generateFunctions from "../utils/generateFunctions.js";
@@ -37,6 +39,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  autoApply: typeof autoApply;
+  autoApplyActions: typeof autoApplyActions;
   crons: typeof crons;
   emails: typeof emails;
   http: typeof http;
@@ -46,13 +50,13 @@ declare const fullApi: ApiFromModules<{
   storage: typeof storage;
   "table/admin": typeof table_admin;
   "table/adminInvites": typeof table_adminInvites;
+  "table/autoApplySettings": typeof table_autoApplySettings;
   "table/discoveredJobs": typeof table_discoveredJobs;
   "table/discoveryRefreshLog": typeof table_discoveryRefreshLog;
   "table/discoveryRuns": typeof table_discoveryRuns;
   "table/feedback": typeof table_feedback;
+  "table/pendingApplications": typeof table_pendingApplications;
   "table/proposals": typeof table_proposals;
-  "table/upworkCredentials": typeof table_upworkCredentials;
-  "table/upworkOAuthState": typeof table_upworkOAuthState;
   "table/users": typeof table_users;
   upwork: typeof upwork;
   "utils/generateFunctions": typeof utils_generateFunctions;
@@ -317,6 +321,96 @@ export declare const components: {
             | "failed";
         },
         null
+      >;
+    };
+  };
+  upwork: {
+    private: {
+      getTokens: FunctionReference<
+        "query",
+        "internal",
+        {},
+        {
+          _creationTime: number;
+          _id: string;
+          accessToken: string;
+          expiresAt: number;
+          refreshToken: string;
+          tokenType: string;
+        } | null
+      >;
+      storeTokens: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          accessToken: string;
+          expiresAt: number;
+          refreshToken: string;
+          tokenType: string;
+        },
+        null
+      >;
+      upsertJobPostings: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          postings: Array<{
+            budgetAmount?: string;
+            budgetCurrency?: string;
+            category?: string;
+            clientCompanyName?: string;
+            clientTotalHires?: number;
+            createdDateTime: string;
+            description: string;
+            duration?: string;
+            experienceLevel: string;
+            publishedDateTime: string;
+            skills: Array<{ name: string }>;
+            subcategory?: string;
+            title: string;
+            upworkId: string;
+          }>;
+        },
+        null
+      >;
+    };
+    public: {
+      exchangeAuthCode: FunctionReference<
+        "action",
+        "internal",
+        {
+          baseUrl: string;
+          clientId: string;
+          clientSecret: string;
+          code: string;
+          redirectUri: string;
+        },
+        any
+      >;
+      getAuthStatus: FunctionReference<"query", "internal", {}, any>;
+      listJobPostings: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number },
+        any
+      >;
+      refreshAccessToken: FunctionReference<
+        "action",
+        "internal",
+        { baseUrl: string; clientId: string; clientSecret: string },
+        any
+      >;
+      searchJobPostings: FunctionReference<
+        "action",
+        "internal",
+        {
+          baseUrl: string;
+          clientId: string;
+          clientSecret: string;
+          searchQuery?: string;
+          sortField?: string;
+        },
+        any
       >;
     };
   };

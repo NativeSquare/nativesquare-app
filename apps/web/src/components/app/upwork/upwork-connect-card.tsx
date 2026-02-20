@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@packages/backend/convex/_generated/api";
 import {
   Card,
@@ -13,20 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconBrandUpwork, IconCheck } from "@tabler/icons-react";
 
-/** Upwork OAuth callback URL path. Full URL = origin + this path. */
-const UPWORK_CALLBACK_PATH = "/api/upwork/callback";
-
 export function UpworkConnectCard() {
   const status = useQuery(api.upwork.getConnectionStatus);
-  const initiateConnect = useMutation(api.upwork.initiateConnect);
+  const authUrl = useQuery(api.upwork.getAuthUrl);
 
-  const handleConnect = async () => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const redirectUri = `${origin}${UPWORK_CALLBACK_PATH}`;
-    const { authUrl } = await initiateConnect({
-      redirectUri: redirectUri || undefined,
-    });
-    window.location.href = authUrl;
+  const handleConnect = () => {
+    if (authUrl) {
+      window.location.href = authUrl;
+    }
   };
 
   if (status === undefined) {
@@ -43,7 +37,7 @@ export function UpworkConnectCard() {
     );
   }
 
-  if (status.connected) {
+  if (status === "connected") {
     return (
       <Card>
         <CardHeader>
@@ -72,14 +66,15 @@ export function UpworkConnectCard() {
           Upwork
         </CardTitle>
         <CardDescription>
-          Connect your Upwork account to discover jobs, prepare and send
-          proposals, and track your acquisition funnel.
+          {status === "expired"
+            ? "Your Upwork connection has expired. Please reconnect."
+            : "Connect your Upwork account to discover jobs, prepare and send proposals, and track your acquisition funnel."}
         </CardDescription>
       </CardHeader>
       <CardFooter>
-        <Button onClick={handleConnect}>
+        <Button onClick={handleConnect} disabled={!authUrl}>
           <IconBrandUpwork className="mr-2 size-4" />
-          Connect Upwork
+          {status === "expired" ? "Reconnect Upwork" : "Connect Upwork"}
         </Button>
       </CardFooter>
     </Card>

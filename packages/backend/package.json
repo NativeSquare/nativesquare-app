@@ -16,14 +16,18 @@
   "license": "ISC",
   "dependencies": {
     "@auth/core": "0.37.0",
+    "@browserbasehq/sdk": "^2.6.0",
     "@convex-dev/auth": "^0.0.90",
     "@convex-dev/migrations": "^0.3.1",
     "@convex-dev/resend": "^0.2.3",
-    "@packages/transactional": "workspace:*",
+    "@nativesquare/upwork": "^0.1.0",
     "@packages/shared": "workspace:*",
+    "@packages/transactional": "workspace:*",
     "@react-email/render": "^2.0.4",
+    "chromium-bidi": "^15.0.0",
     "convex": "^1.29.3",
     "oslo": "^1.2.1",
+    "playwright-core": "^1.58.2",
     "resend": "3.2.0"
   },
   "peerDependencies": {
