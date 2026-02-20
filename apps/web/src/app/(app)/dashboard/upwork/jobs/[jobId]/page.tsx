@@ -100,7 +100,8 @@ export default function UpworkJobDetailPage() {
     );
   }
 
-  const upworkJobUrl = `https://www.upwork.com/jobs/~${job.upworkJobId}`;
+  const jobKey = job.upworkJobId.replace(/^~/, "");
+  const upworkJobUrl = `https://www.upwork.com/jobs/~${jobKey}`;
 
   return (
     <div className="space-y-6 px-4 py-6 lg:px-6">

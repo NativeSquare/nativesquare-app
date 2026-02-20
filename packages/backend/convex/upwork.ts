@@ -6,6 +6,7 @@ import {
   action,
   internalAction,
   internalMutation,
+  internalQuery,
   mutation,
   query,
 } from "./_generated/server";
@@ -592,6 +593,93 @@ export const addDiscoveredJobForUser = internalMutation({
   },
 });
 
+const UPWORK_GRAPHQL_URL = "https://api.upwork.com/graphql";
+const UPWORK_TOKEN_URL = "https://www.upwork.com/api/v3/oauth2/token";
+
+const UPWORK_JOBS_QUERY = `
+query DiscoverJobs($filter: MarketplaceJobPostingsSearchFilter, $searchType: MarketplaceJobPostingSearchType, $sort: [MarketplaceJobPostingSearchSortAttribute]) {
+  marketplaceJobPostingsSearch(
+    marketPlaceJobFilter: $filter
+    searchType: $searchType
+    sortAttributes: $sort
+  ) {
+    totalCount
+    edges {
+      node {
+        id
+        title
+        description
+        ciphertext
+        createdDateTime
+        amount { rawValue currency displayValue }
+        duration
+        durationLabel
+        client {
+          totalHires
+          totalSpent { displayValue }
+          verificationStatus
+          totalFeedback
+        }
+        skills { prettyName }
+      }
+    }
+  }
+}
+`;
+
+export const getUpworkCredentials = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.union(
+    v.object({
+      accessToken: v.string(),
+      refreshToken: v.string(),
+      expiresAt: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const creds = await ctx.db
+      .query("upworkCredentials")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .unique();
+    if (!creds) return null;
+    return {
+      accessToken: creds.accessToken,
+      refreshToken: creds.refreshToken,
+      expiresAt: creds.expiresAt,
+    };
+  },
+});
+
+export const updateUpworkTokens = internalMutation({
+  args: {
+    userId: v.id("users"),
+    accessToken: v.string(),
+    refreshToken: v.string(),
+    expiresAt: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("upworkCredentials")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .unique();
+    if (!existing) {
+      console.error(
+        "[Upwork Discovery] No credentials row to update for user",
+        args.userId,
+      );
+      return null;
+    }
+    await ctx.db.patch(existing._id, {
+      accessToken: args.accessToken,
+      refreshToken: args.refreshToken,
+      expiresAt: args.expiresAt,
+    });
+    return null;
+  },
+});
+
 /**
  * Internal: run discovery for one user (scheduled or after manual request).
  */
@@ -606,25 +694,176 @@ export const runDiscoveryForUser = internalAction({
       userId: args.userId,
       source: args.source,
     });
-    // TODO: get user's Upwork credentials, call Upwork job search API, then
-    // for each job call ctx.runMutation(internal.upwork.addDiscoveredJobForUser, { userId, ...job })
-    const jobs: Array<{
-      upworkJobId: string;
-      title: string;
-      description?: string;
-      budgetInfo?: string;
-      postedAt?: number;
-    }> = []; // discoverJobs placeholder returns []
-    for (const job of jobs) {
+
+    const creds = await ctx.runQuery(internal.upwork.getUpworkCredentials, {
+      userId: args.userId,
+    });
+    if (!creds) {
+      console.error(
+        "[Upwork Discovery] No credentials found for user",
+        args.userId,
+      );
+      return null;
+    }
+
+    let { accessToken } = creds;
+    const TOKEN_EXPIRY_BUFFER_MS = 60_000;
+
+    if (creds.expiresAt < Date.now() + TOKEN_EXPIRY_BUFFER_MS) {
+      console.log("[Upwork Discovery] Access token expired, refreshing…");
+      const clientId = process.env.UPWORK_CLIENT_ID;
+      const clientSecret = process.env.UPWORK_CLIENT_SECRET;
+      if (!clientId || !clientSecret) {
+        console.error(
+          "[Upwork Discovery] Cannot refresh token: UPWORK_CLIENT_ID or UPWORK_CLIENT_SECRET missing",
+        );
+        return null;
+      }
+
+      const refreshRes = await fetch(UPWORK_TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: creds.refreshToken,
+          client_id: clientId,
+          client_secret: clientSecret,
+        }).toString(),
+      });
+
+      if (!refreshRes.ok) {
+        const body = await refreshRes.text();
+        console.error(
+          "[Upwork Discovery] Token refresh failed:",
+          refreshRes.status,
+          body,
+        );
+        return null;
+      }
+
+      const tokenData = (await refreshRes.json()) as {
+        access_token: string;
+        refresh_token: string;
+        expires_in: number;
+      };
+
+      accessToken = tokenData.access_token;
+      const newExpiresAt = Date.now() + tokenData.expires_in * 1000;
+
+      await ctx.runMutation(internal.upwork.updateUpworkTokens, {
+        userId: args.userId,
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        expiresAt: newExpiresAt,
+      });
+      console.log("[Upwork Discovery] Token refreshed successfully");
+    }
+
+    const graphqlRes = await fetch(UPWORK_GRAPHQL_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        query: UPWORK_JOBS_QUERY,
+        variables: {
+          filter: {
+            pagination_eq: { after: "0", first: 30 },
+          },
+          searchType: "USER_JOBS_SEARCH",
+          sort: [{ field: "RECENCY" }],
+        },
+      }),
+    });
+
+    if (!graphqlRes.ok) {
+      const body = await graphqlRes.text();
+      console.error(
+        "[Upwork Discovery] GraphQL request failed:",
+        graphqlRes.status,
+        body,
+      );
+      return null;
+    }
+
+    const gqlBody = (await graphqlRes.json()) as {
+      data?: {
+        marketplaceJobPostingsSearch?: {
+          totalCount?: number;
+          edges?: Array<{
+            node: {
+              id: string;
+              title: string;
+              description: string;
+              ciphertext: string;
+              createdDateTime: string;
+              amount?: { rawValue?: string; currency?: string; displayValue?: string };
+              duration?: string;
+              durationLabel?: string;
+              client?: {
+                totalHires?: number;
+                totalSpent?: { displayValue?: string };
+                verificationStatus?: string;
+                totalFeedback?: number;
+              };
+              skills?: Array<{ prettyName: string }>;
+            };
+          }>;
+        };
+      };
+      errors?: Array<{ message: string }>;
+    };
+
+    if (gqlBody.errors && gqlBody.errors.length > 0) {
+      console.error(
+        "[Upwork Discovery] GraphQL errors:",
+        JSON.stringify(gqlBody.errors),
+      );
+      return null;
+    }
+
+    const edges =
+      gqlBody.data?.marketplaceJobPostingsSearch?.edges ?? [];
+    const totalCount =
+      gqlBody.data?.marketplaceJobPostingsSearch?.totalCount ?? 0;
+    console.log(
+      `[Upwork Discovery] Fetched ${edges.length} jobs (totalCount: ${totalCount}) for user ${args.userId}`,
+    );
+
+    for (const edge of edges) {
+      const node = edge.node;
+
+      let budgetInfo: string | undefined;
+      if (node.amount?.displayValue) {
+        budgetInfo = node.amount.displayValue;
+      }
+      if (node.durationLabel) {
+        budgetInfo = budgetInfo
+          ? `${budgetInfo} · ${node.durationLabel}`
+          : node.durationLabel;
+      }
+
+      let postedAt: number | undefined;
+      if (node.createdDateTime) {
+        const parsed = Date.parse(node.createdDateTime);
+        if (!isNaN(parsed)) postedAt = parsed;
+      }
+
+      const description = node.description
+        ? node.description.slice(0, 2000)
+        : undefined;
+
       await ctx.runMutation(internal.upwork.addDiscoveredJobForUser, {
         userId: args.userId,
-        upworkJobId: job.upworkJobId,
-        title: job.title,
-        description: job.description,
-        budgetInfo: job.budgetInfo,
-        postedAt: job.postedAt,
+        upworkJobId: node.ciphertext || node.id,
+        title: node.title,
+        description,
+        budgetInfo,
+        postedAt,
       });
     }
+
     return null;
   },
 });
