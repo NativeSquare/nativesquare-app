@@ -30,8 +30,31 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
-  // Debug: log full URL received (code is one-time use; helps see if param was stripped)
+  // --- Debug: log everything Upwork sent so we can see if params are missing ---
   const fullUrl = request.url;
+  const rawQueryString = request.nextUrl.search; // exact ?key=val&...
+  const allParamNames = Array.from(searchParams.keys());
+  const paramSummary: Record<string, string> = {};
+  for (const name of allParamNames) {
+    const value = searchParams.get(name);
+    if (name === "code") {
+      paramSummary[name] = value ? `present (length=${value.length})` : "MISSING";
+    } else {
+      paramSummary[name] = value ?? "MISSING";
+    }
+  }
+  console.log("[Upwork OAuth] Callback received", {
+    fullUrl,
+    rawQueryString: rawQueryString || "(empty)",
+    paramNames: allParamNames,
+    paramSummary,
+    expectedParams: ["code", "state"],
+    hasCode: !!code,
+    hasState: !!state,
+    hasError: !!error,
+  });
+  // --- end debug ---
+
   const receivedParams = Object.fromEntries(
     Array.from(searchParams.entries()).filter(([k]) => k !== "code"),
   );

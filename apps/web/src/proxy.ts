@@ -14,14 +14,21 @@ const isAuthRoute = createRouteMatcher([
 ]);
 const isProtectedRoute = createRouteMatcher(["/dashboard"]); // TODO : Redirect to /app by default
 
-export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
-  if (isAuthRoute(request) && (await convexAuth.isAuthenticated())) {
-    return nextjsMiddlewareRedirect(request, "/dashboard");
-  }
-  if (isProtectedRoute(request) && !(await convexAuth.isAuthenticated())) {
-    return nextjsMiddlewareRedirect(request, "/login");
-  }
-});
+export default convexAuthNextjsMiddleware(
+  async (request, { convexAuth }) => {
+    if (isAuthRoute(request) && (await convexAuth.isAuthenticated())) {
+      return nextjsMiddlewareRedirect(request, "/dashboard");
+    }
+    if (isProtectedRoute(request) && !(await convexAuth.isAuthenticated())) {
+      return nextjsMiddlewareRedirect(request, "/login");
+    }
+  },
+  {
+    shouldHandleCode: (request) => {
+      return !request.nextUrl.pathname.startsWith("/api/upwork/callback");
+    },
+  },
+);
 
 export const config = {
   // The following matcher runs middleware on all routes

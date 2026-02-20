@@ -57,6 +57,12 @@ export const initiateConnect = mutation({
       state,
     });
     const authUrl = `${UPWORK_AUTH_BASE}?${params.toString()}`;
+
+    // Log so you can verify env and OAuth URL in Convex dashboard → Logs
+    console.log("[Upwork OAuth] Initiate — redirect_uri:", redirectUri);
+    console.log("[Upwork OAuth] Initiate — client_id:", clientId);
+    console.log("[Upwork OAuth] Initiate — full auth URL:", authUrl);
+
     return { authUrl, state };
   },
 });
