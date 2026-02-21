@@ -21,13 +21,6 @@ crons.interval(
   {},
 );
 
-// Run auto-apply workflow twice daily (with per-user jitter added inside the handler)
-crons.interval(
-  "upwork-auto-apply",
-  { hours: 12 },
-  internal.autoApply.runScheduledAutoApply,
-  {},
-);
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const FOUR_WEEKS_MS = 4 * ONE_WEEK_MS;

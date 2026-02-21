@@ -9,8 +9,6 @@
  */
 
 import type * as auth from "../auth.js";
-import type * as autoApply from "../autoApply.js";
-import type * as autoApplyActions from "../autoApplyActions.js";
 import type * as crons from "../crons.js";
 import type * as emails from "../emails.js";
 import type * as http from "../http.js";
@@ -20,13 +18,10 @@ import type * as migrations from "../migrations.js";
 import type * as storage from "../storage.js";
 import type * as table_admin from "../table/admin.js";
 import type * as table_adminInvites from "../table/adminInvites.js";
-import type * as table_autoApplySettings from "../table/autoApplySettings.js";
 import type * as table_discoveredJobs from "../table/discoveredJobs.js";
 import type * as table_discoveryRefreshLog from "../table/discoveryRefreshLog.js";
 import type * as table_discoveryRuns from "../table/discoveryRuns.js";
 import type * as table_feedback from "../table/feedback.js";
-import type * as table_pendingApplications from "../table/pendingApplications.js";
-import type * as table_proposals from "../table/proposals.js";
 import type * as table_users from "../table/users.js";
 import type * as upwork from "../upwork.js";
 import type * as utils_generateFunctions from "../utils/generateFunctions.js";
@@ -39,8 +34,6 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
-  autoApply: typeof autoApply;
-  autoApplyActions: typeof autoApplyActions;
   crons: typeof crons;
   emails: typeof emails;
   http: typeof http;
@@ -50,13 +43,10 @@ declare const fullApi: ApiFromModules<{
   storage: typeof storage;
   "table/admin": typeof table_admin;
   "table/adminInvites": typeof table_adminInvites;
-  "table/autoApplySettings": typeof table_autoApplySettings;
   "table/discoveredJobs": typeof table_discoveredJobs;
   "table/discoveryRefreshLog": typeof table_discoveryRefreshLog;
   "table/discoveryRuns": typeof table_discoveryRuns;
   "table/feedback": typeof table_feedback;
-  "table/pendingApplications": typeof table_pendingApplications;
-  "table/proposals": typeof table_proposals;
   "table/users": typeof table_users;
   upwork: typeof upwork;
   "utils/generateFunctions": typeof utils_generateFunctions;
@@ -379,7 +369,6 @@ export declare const components: {
         "action",
         "internal",
         {
-          baseUrl: string;
           clientId: string;
           clientSecret: string;
           code: string;
@@ -387,7 +376,19 @@ export declare const components: {
         },
         any
       >;
+      fetchJobPosting: FunctionReference<
+        "action",
+        "internal",
+        { clientId: string; clientSecret: string; upworkId: string },
+        any
+      >;
       getAuthStatus: FunctionReference<"query", "internal", {}, any>;
+      getJobPosting: FunctionReference<
+        "query",
+        "internal",
+        { upworkId: string },
+        any
+      >;
       listJobPostings: FunctionReference<
         "query",
         "internal",
@@ -397,14 +398,13 @@ export declare const components: {
       refreshAccessToken: FunctionReference<
         "action",
         "internal",
-        { baseUrl: string; clientId: string; clientSecret: string },
+        { clientId: string; clientSecret: string },
         any
       >;
       searchJobPostings: FunctionReference<
         "action",
         "internal",
         {
-          baseUrl: string;
           clientId: string;
           clientSecret: string;
           searchQuery?: string;

@@ -25,8 +25,6 @@ http.route({
 // Upwork OAuth callback — handled by the @nativesquare/upwork component.
 // Redirect URI in Upwork Developer Portal must be: {CONVEX_SITE_URL}/upwork/callback
 registerRoutes(http, components.upwork, {
-  clientId: process.env.UPWORK_CLIENT_ID!,
-  clientSecret: process.env.UPWORK_CLIENT_SECRET!,
   onSuccess: `${process.env.SITE_URL}/dashboard`,
 });
 
