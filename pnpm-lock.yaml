@@ -567,8 +567,8 @@ importers:
         specifier: ^0.2.3
         version: 0.2.3(@react-email/render@2.0.4(react-dom@19.2.4(react@18.2.0))(react@18.2.0))(convex-helpers@0.1.111(convex@1.31.7(@clerk/clerk-react@5.60.0(react-dom@19.2.4(react@18.2.0))(react@18.2.0))(react@18.2.0))(react@18.2.0)(typescript@5.9.3)(zod@4.3.6))(convex@1.31.7(@clerk/clerk-react@5.60.0(react-dom@19.2.4(react@18.2.0))(react@18.2.0))(react@18.2.0))(react@18.2.0)
       '@nativesquare/upwork':
-        specifier: 0.6.1
-        version: 0.6.1(convex@1.31.7(@clerk/clerk-react@5.60.0(react-dom@19.2.4(react@18.2.0))(react@18.2.0))(react@18.2.0))(react@18.2.0)
+        specifier: 1.0.0
+        version: 1.0.0(convex@1.31.7(@clerk/clerk-react@5.60.0(react-dom@19.2.4(react@18.2.0))(react@18.2.0))(react@18.2.0))(react@18.2.0)
       '@packages/shared':
         specifier: workspace:*
         version: link:../shared
@@ -2194,8 +2194,8 @@ packages:
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
 
-  '@nativesquare/upwork@0.6.1':
-    resolution: {integrity: sha512-5rq1IXQOViq7/l8Bf7rF5wNzB5UwoNzLsYxDYf2IlJjoTJ2g3LfHm/gfXVr6m1WLuqfCStK5076aoZXMJjOLVQ==}
+  '@nativesquare/upwork@1.0.0':
+    resolution: {integrity: sha512-RxxWaya2gPfatg751ojUYSfGXjln9B5aLZEw6t3K11Agoi5mpZkCO9QU5gE8i/iOM56cY/Qh8lu50tQuSTHGnw==}
     peerDependencies:
       convex: ^1.31.7
       react: ^18.3.1 || ^19.0.0
@@ -10387,7 +10387,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@nativesquare/upwork@0.6.1(convex@1.31.7(@clerk/clerk-react@5.60.0(react-dom@19.2.4(react@18.2.0))(react@18.2.0))(react@18.2.0))(react@18.2.0)':
+  '@nativesquare/upwork@1.0.0(convex@1.31.7(@clerk/clerk-react@5.60.0(react-dom@19.2.4(react@18.2.0))(react@18.2.0))(react@18.2.0))(react@18.2.0)':
     dependencies:
       convex: 1.31.7(@clerk/clerk-react@5.60.0(react-dom@19.2.4(react@18.2.0))(react@18.2.0))(react@18.2.0)
       react: 18.2.0

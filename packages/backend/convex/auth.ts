@@ -42,21 +42,8 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   ],
   callbacks: {
     async redirect({ redirectTo }) {
-      const normalized = (url: string) => url.replace(/\/$/, "") || url;
-      const allowed = [
-        `${APP_SLUG}://`,
-        "http://localhost:3000",
-        ...(process.env.AUTH_WEB_APP_URL
-          ? [
-              process.env.AUTH_WEB_APP_URL,
-              normalized(process.env.AUTH_WEB_APP_URL),
-            ]
-          : []),
-      ];
-      const ok =
-        allowed.includes(redirectTo) ||
-        allowed.some((u) => normalized(redirectTo) === normalized(u));
-      if (!ok) {
+      const allowed = [`${APP_SLUG}://`, process.env.SITE_URL].filter(Boolean);
+      if (!allowed.includes(redirectTo)) {
         throw new Error(`Invalid redirectTo URI ${redirectTo}`);
       }
       return redirectTo;
