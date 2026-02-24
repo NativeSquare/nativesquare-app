@@ -429,8 +429,43 @@ export declare const components: {
         {
           clientId: string;
           clientSecret: string;
-          searchQuery?: string;
-          sortField?: string;
+          marketPlaceJobFilter?: {
+            area_eq?: { latitude: number; longitude: number; radius: number };
+            budgetRange_eq?: { rangeEnd?: number; rangeStart?: number };
+            categoryIds_any?: Array<string>;
+            clientHiresRange_eq?: { rangeEnd?: number; rangeStart?: number };
+            enterpriseOnly_eq?: boolean;
+            experienceLevel_eq?: "ENTRY_LEVEL" | "EXPERT" | "INTERMEDIATE";
+            hourlyRate_eq?: { rangeEnd?: number; rangeStart?: number };
+            jobType_eq?: "FIXED" | "HOURLY";
+            locations_any?: Array<string>;
+            occupationIds_any?: Array<string>;
+            ontologySkillIds_all?: Array<string>;
+            pagination_eq?: { after?: string; first: number };
+            preserveFacet_eq?: string;
+            previousClients_eq?: boolean;
+            proposalRange_eq?: { rangeEnd?: number; rangeStart?: number };
+            ptcIds_any?: Array<string>;
+            ptcOnly_eq?: boolean;
+            searchExpression_eq?: string;
+            searchTerm_eq?: {
+              andTerms_all?: Array<string>;
+              exactTerms_any?: Array<string>;
+              excludeTerms_any?: Array<string>;
+              orTerms_any?: Array<string>;
+            };
+            skillExpression_eq?: string;
+            subcategoryIds_any?: Array<string>;
+            timezone_eq?: string;
+            titleExpression_eq?: string;
+            userLocationMatch_eq?: boolean;
+            verifiedPaymentOnly_eq?: boolean;
+            visitorCountry_eq?: string;
+            workload_eq?: "AS_NEEDED" | "FULL_TIME" | "NOT_SURE" | "PART_TIME";
+          };
+          sortAttributes?: Array<
+            "CLIENT_RATING" | "CLIENT_TOTAL_CHARGE" | "RECENCY" | "RELEVANCE"
+          >;
         },
         any
       >;
