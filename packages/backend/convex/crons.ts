@@ -21,6 +21,13 @@ crons.interval(
   {},
 );
 
+// Fetch proposal statuses from Upwork and store daily analytics snapshots
+crons.interval(
+  "proposal-snapshots",
+  { hours: 24 },
+  internal.analytics.runScheduledProposalSnapshots,
+);
+
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const FOUR_WEEKS_MS = 4 * ONE_WEEK_MS;

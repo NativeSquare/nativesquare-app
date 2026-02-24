@@ -266,7 +266,13 @@ export const runDiscoveryForUser = internalAction({
 
     let result;
     try {
-      result = await upwork.searchJobPostings(ctx);
+      result = await upwork.searchJobPostings(ctx, {
+        marketPlaceJobFilter: {
+          jobType_eq: "FIXED" as const,
+          budgetRange_eq: { rangeStart: 5000 },
+          searchTerm_eq: { orTerms_any: ["Web", "Mobile"] },
+        },
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unknown error";

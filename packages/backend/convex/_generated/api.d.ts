@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as emails from "../emails.js";
@@ -22,6 +23,7 @@ import type * as table_discoveredJobs from "../table/discoveredJobs.js";
 import type * as table_discoveryRefreshLog from "../table/discoveryRefreshLog.js";
 import type * as table_discoveryRuns from "../table/discoveryRuns.js";
 import type * as table_feedback from "../table/feedback.js";
+import type * as table_proposalSnapshots from "../table/proposalSnapshots.js";
 import type * as table_users from "../table/users.js";
 import type * as upwork from "../upwork.js";
 import type * as utils_generateFunctions from "../utils/generateFunctions.js";
@@ -33,6 +35,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  analytics: typeof analytics;
   auth: typeof auth;
   crons: typeof crons;
   emails: typeof emails;
@@ -47,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   "table/discoveryRefreshLog": typeof table_discoveryRefreshLog;
   "table/discoveryRuns": typeof table_discoveryRuns;
   "table/feedback": typeof table_feedback;
+  "table/proposalSnapshots": typeof table_proposalSnapshots;
   "table/users": typeof table_users;
   upwork: typeof upwork;
   "utils/generateFunctions": typeof utils_generateFunctions;
@@ -380,6 +384,24 @@ export declare const components: {
         "action",
         "internal",
         { clientId: string; clientSecret: string; upworkId: string },
+        any
+      >;
+      fetchProposal: FunctionReference<
+        "action",
+        "internal",
+        { clientId: string; clientSecret: string; proposalId: string },
+        any
+      >;
+      fetchProposals: FunctionReference<
+        "action",
+        "internal",
+        {
+          clientId: string;
+          clientSecret: string;
+          filter: any;
+          pagination: { after: string | null; first: number };
+          sortAttribute: any;
+        },
         any
       >;
       getAuthStatus: FunctionReference<"query", "internal", {}, any>;

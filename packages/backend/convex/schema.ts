@@ -5,6 +5,7 @@ import { discoveredJobs } from "./table/discoveredJobs";
 import { discoveryRefreshLog } from "./table/discoveryRefreshLog";
 import { discoveryRuns } from "./table/discoveryRuns";
 import { feedback } from "./table/feedback";
+import { proposalSnapshots } from "./table/proposalSnapshots";
 import { users } from "./table/users";
 
 export default defineSchema({
@@ -14,5 +15,6 @@ export default defineSchema({
   discoveryRefreshLog,
   discoveryRuns,
   feedback,
+  proposalSnapshots,
   users,
 });
